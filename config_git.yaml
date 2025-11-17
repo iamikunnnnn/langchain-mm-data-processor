@@ -1,0 +1,33 @@
+# AI Agent 配置文件
+
+# 唤醒词配置
+wake_words: ["小布小布","你好小布","小布你好","小布"]
+
+# 语音识别配置
+speech_recognition:
+  language: "zh-CN"
+  sample_rate: 44100 # 采样率
+  channels: 1 # 通道
+  input_device_index: 1 # 设备编号
+
+# 对话模型配置
+chat_model:
+#  name: "Qwen/Qwen2.5-7B-Instruct"
+  name: "Qwen/Qwen3-VL-8B-Thinking"
+#  name: "Qwen/Qwen3-VL-32B-Thinking"
+  max_length: 1000
+
+# API配置
+api:
+  openai_api_key: "your keys"
+  base_url: "https://api.siliconflow.cn/v1"  # 可自己选择
+  gaode_api_key: "your gaode_keys"
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: "ai_agent.log"
+
+# 向量化模型配置
+embedding:
+  model: "F:/MuXueAI/MuXueAI/bge_small_zh" # 可选择对应的中文向量化模型偏置
