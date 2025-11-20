@@ -391,7 +391,7 @@ def get_ML_param(query: str):
     except Exception as e:
         print(f"Error: LLM 输出解析失败: {e}\nRaw output: {llm_output}")
         # 兜底
-        model_name, X_cols, y_col, mode, model_param = None, [], None, None, {}
+        model_name = "随机森林"
 
     # 7. 类型转换与验证 (复用原函数)
     if not isinstance(model_param, dict):

@@ -224,113 +224,12 @@ class DataPreprocessor:
         """
         if self.data is None:
             return {"error": "没有加载数据"}
-
-        # 1. 计算相关性>0.5的列对（仅针对定量数据）
-        # 筛选数值型列用于相关性分析
-        numeric_cols = self.data.select_dtypes(include=['number']).columns.tolist()
-        high_corr_pairs = []
-        if len(numeric_cols) >= 2:
-            corr_matrix = self.data[numeric_cols].corr().abs()
-            for i in range(len(numeric_cols)):
-                for j in range(i + 1, len(numeric_cols)):
-                    if corr_matrix.iloc[i, j] > 0.5:
-                        high_corr_pairs.append([numeric_cols[i], numeric_cols[j]])
-
-        # 2. 按数据类型计算统计信息
-        stats_info = {}
-        all_cols = self.data.columns.tolist()
-
-        for col in all_cols:
-            col_data = self.data[col].dropna()
-            if col_data.empty:
-                stats_info[col] = {"error": "该列全为空值", "data_type": "unknown"}
-                continue
-
-            # 判断数据类型（定类/定量）
-            if pd.api.types.is_numeric_dtype(col_data):
-                data_type = "quantitative"  # 定量数据（数值型）
-            else:
-                # 检查是否为定类数据（字符串或类别型）
-                if pd.api.types.is_object_dtype(col_data) or pd.api.types.is_categorical_dtype(col_data):
-                    data_type = "categorical"  # 定类数据
-                else:
-                    data_type = "other"  # 其他类型（如时间等）
-
-            # 初始化统计信息字典
-            col_stats = {
-                "data_type": data_type,
-                "count": len(col_data),
-                "missing_count": self.data[col].isna().sum()
-            }
-
-            # 定量数据：计算数值型统计量
-            if data_type == "quantitative":
-                # 集中趋势
-                col_stats["mean"] = round(col_data.mean(), 2)
-                col_stats["median"] = round(col_data.median(), 2)
-
-                # 离散程度
-                col_stats["std"] = round(col_data.std(), 2)
-                col_stats["variance"] = round(col_data.var(), 2)
-                col_stats["min"] = round(col_data.min(), 2)
-                col_stats["max"] = round(col_data.max(), 2)
-
-                # 分位数
-                q1 = col_data.quantile(0.25)
-                q3 = col_data.quantile(0.75)
-                col_stats["25%_quantile"] = round(q1, 2)
-                col_stats["75%_quantile"] = round(q3, 2)
-                col_stats["iqr"] = round(q3 - q1, 2)
-
-                # 分布形态
-                col_stats["skewness"] = round(col_data.skew(), 2)
-
-                # 其他衍生指标
-                col_stats["sum"] = round(col_data.sum(), 2)
-                if col_data.mean() != 0:
-                    col_stats["cv"] = round(col_data.std() / col_data.mean(), 2)
-
-                # 正态性检验
-                try:
-                    if len(col_data) >= 3:
-                        stat, p_value = stats.shapiro(col_data)
-                        col_stats["normality"] = {
-                            "statistic": round(stat, 4),
-                            "p_value": round(p_value, 4),
-                            "is_normal": p_value > 0.05
-                        }
-                    else:
-                        col_stats["normality"] = {"error": "样本量不足（需≥3）"}
-                except:
-                    col_stats["normality"] = {"error": "检验失败"}
-
-            # 定类数据：计算分类相关统计量
-            elif data_type == "categorical":
-                # 众数（最频繁出现的值）
-                mode = col_data.mode()
-                col_stats["mode"] = mode.iloc[0] if not mode.empty else None
-
-                # 类别频数（前5个，避免类别过多时冗余）
-                top_categories = col_data.value_counts().head(5).to_dict()
-                col_stats["top_categories"] = {str(k): v for k, v in top_categories.items()}
-
-                # 唯一值数量
-                col_stats["unique_count"] = col_data.nunique()
-
-            # 其他类型数据：仅保留基础信息
-            else:
-                col_stats["basic_info"] = f"非定量/定类数据（{col_data.dtype}）"
-
-            stats_info[col] = col_stats
-
         return {
             "形状": self.data.shape,
-            "列名": all_cols,
+            "列名": self.data.columns,
             "空值数量": dict(self.data.isna().sum()),
             "重复行数量": self.data.duplicated().sum(),
             "前二行数据": self.data.head(2).to_dict(orient="records"),
-            "高相关性列对(>0.5)": high_corr_pairs,  # 仅包含定量列
-            "列统计信息": stats_info
         }
 
 

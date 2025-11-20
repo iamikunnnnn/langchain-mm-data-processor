@@ -1,10 +1,13 @@
 import os
 
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.tracers import ConsoleCallbackHandler
 
 from utils import load_config
 from chatbot import ChatBot
 from utils import load_config
+
+
 os.environ["USER_AGENT"] = "my-app/0.1"
 
 class nlp_chatbot(ChatBot):
@@ -22,7 +25,7 @@ class nlp_chatbot(ChatBot):
                 config= {"configurable": {"thread_id": self.thread_id}},
                 stream_mode ="values"
             )
-
+            # result =StrOutputParser().parse(result)
             # 从结果中提取最后一条消息
             return result["messages"][-1].content
         except ValueError as e:
@@ -33,7 +36,7 @@ if __name__ == '__main__':
     chatbot = nlp_chatbot()
 
     # ret7 = chatbot.get_llm_response("你好，现在几点了？")
-    ret8 = chatbot.get_llm_response("对这个股票训练一个预测模型")
+    ret8 = chatbot.get_llm_response(r"删除记忆")
 
     # print("ret7",ret7)
     print("ret8",ret8)

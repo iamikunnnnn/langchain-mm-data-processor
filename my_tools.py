@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 from typing import Optional
-
+import sqlite3
 import akshare as ak
 import pandas as pd
 import requests
@@ -32,20 +32,41 @@ class columnInput(BaseModel):
     columns: str = Field(..., description="需要填充空值的列名")
 
 
-# 加载FAISS知识库
+
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 embedding = HuggingFaceEmbeddings(model_name=config["embedding"]["model"])
 
-vector_db = FAISS.load_local("faiss_index", embedding,
-                             allow_dangerous_deserialization=True)  # 加载已存储的索引
+vector_db = Chroma(
+    embedding_function=embedding,
+    persist_directory="chroma_index"
+)
+
+@tool("delete_memory",return_direct=True)
+def delete_memory(a=None) -> str:
+    """直接删除所有 Agent 记忆"""
+    conn = None
+    try:
+        conn = sqlite3.connect("./checkpoints.sqlite")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM sqlite_master WHERE thread_id=?", ("conversation_1",))
+        cursor.execute("DELETE FROM checkpoints WHERE thread_id=?", ("conversation_1",))
+        conn.commit()
+        return "所有记忆已直接删除"
+    except sqlite3.Error as e:
+        return f"删除失败：{str(e)}"
+    finally:
+        if conn:
+            conn.close()
 
 
-@tool("get_stock_data_for_model",description="获取股票数据",return_direct=True)
+@tool("get_stock_data_for_model",return_direct=True)
 def get_stock_data_for_model(code: str, start_date: str = '20200101', end_date: str = None) :
     """
-    获取股票数据
+    获取股票数据，调用该工具的前置条件是先调用获取当前时间工具
     Args:
         code (str): 股票代码，如 '600036'。
-        start_date (str): 开始日期 'YYYYMMDD',非必填。
+        start_date (str): 开始日期 'YYYYMMDD',非必填，当用户提出上个月上周等事件信息时需要先获取当前时间，然后获取起始时间转换为YYYYMMDD格式再输入。
     Returns:DataFrame
     """
     if end_date is None:
@@ -139,27 +160,56 @@ def stock_data_model():
     stock_model_dict =train_model(f"temp/stock_data.csv")
     return stock_model_dict
 
-@tool("search_knowledge", description="必须用于从本地知识库获取答案,该工具必须优先使用")
+@tool("search_knowledge")
 def search_knowledge(query: str) -> str:
     """
-    从本地知识库检索最相关的内容，该工具必须优先使用
-    输入：用户查询文本。
-    输出：检索出的知识条目文本。
+    从本地知识库检索最相关的内容
     """
     if not query:
         return "没有提供检索内容"
 
-    docs_with_scores = vector_db.similarity_search_with_score(query, k=20)
+    # 从 Chroma 检索（与 FAISS 接口一致）
+    docs_with_scores = vector_db.similarity_search_with_score(query, k=10)
     if not docs_with_scores:
         return "知识库中没有找到相关内容"
-    threshold = 0.5
-    # 2. 根据阈值筛选结果（分数 < 阈值 表示相似度较高）
-    filtered_docs = [doc for doc, score in docs_with_scores if score < threshold]
+
+    # Chroma 的 score = 1 - cosine，越小越相关
+    threshold = 0.6
+    filtered_docs = [
+        doc for doc, score in docs_with_scores if score <= threshold
+    ]
+
+    if not filtered_docs:
+        # 如果一个都没有，就退而求其次返回前 3 条
+        filtered_docs = [doc for doc, _ in docs_with_scores[:3]]
 
     return "\n\n".join(d.page_content for d in filtered_docs)
 
+@tool("save_to_knowledge_base")
+def save_to_knowledge_base(key_info: str) -> str:
+    """
+    用于存储对话中的关键信息到 Chroma 知识库，仅在满足条件时调用：
+    1. 信息可复用且事实性；
+    2. 信息未存储过或有更新；
+    3. 后续对话/任务可能需要用到。
+    """
+    try:
+        # 避免重复存储
+        docs = vector_db.similarity_search(key_info, k=1)
+        if docs and docs[0].page_content.strip() == key_info.strip():
+            return f"无需重复存储：'{key_info}' 已存在于知识库"
 
-@tool("init_data", return_direct=True)
+        # 存入向量库，并可添加 metadata
+        vector_db.add_texts(
+            [key_info],
+            metadatas=[{"source": "dialogue"}]  # 可自定义 metadata
+        )
+
+        return f"成功存储关键信息到知识库：'{key_info}'"
+    except Exception as e:
+        return f"存储失败：{str(e)}"
+
+@tool("init_data")
 def init_data(file_path):
     """
     每当用户传入临时文件路径时自动输入路径尝试初始化数据表.
@@ -219,36 +269,15 @@ def web_search(query):
 
     return results
 
-
-def get_coordinate(address):
-    """
-    获取地点坐标
-    :param address: 需要提取坐标的地点
-    :return: 起始地点对应的坐标
-    """
-    api_key = config["api"]["gaode_api_key"]
-    url = "https://restapi.amap.com/v3/geocode/geo"
-    params = {
-        "key": api_key,
-        "address": address
-    }
-    response = requests.get(url, params=params)
-
-    data = response.json()
-    if data["status"] == "1" and data["count"] != "0":
-        location = data["geocodes"][0]["location"]
-        return f"{location}"
-    else:
-        return None
-
 @tool("dataframe_analyse", return_direct=True)
 def dataframe_analyse(tmp=None):
     """
     对表格数据进行分析,当用户存在对数据的基础分析意图时调用,同样只需调用一次，无需输入任何参数
     :return: {"形状","列名","空值数量","重复行数量"}
     """
+    from stat_analyse import filter_normal_stats
     if isinstance(progressor, DataPreprocessor):
-        input_info = progressor.get_basic_info()
+        input_info = filter_normal_stats()
         # 1. 初始化 (使用单个 LLM)
         llm = ChatOpenAI(
             base_url="https://api.siliconflow.cn/v1",
@@ -260,15 +289,10 @@ def dataframe_analyse(tmp=None):
         # 3. Prompt 模板
         prompt_template = PromptTemplate(
             template="""
-            你是一名统计学专家，专门用于分析数据，你需要判断数据的各个指标的意义，保留有意义的信息，不需要分析，而是做信息过滤。
+            你是一名统计学专家，专门用于分析数据，你需要先完整复述输入的所有内容，然后在最后附上自己的分析判断
             核心任务是：
-                    1. 首先最重要的，你要先完整复述：all_cols、前二行数据、形状
-                    2. 整合信息并展示你分析后认为有用的信息。
-                    4. 剔除冗余 / 无意义信息;
-
-            核心目标：
-                1.你传递出去的信息足以让别人在看不到数据的情况下，能够完成接下来的统计学建模或者机器学习建模。
-
+                    1. 首先最重要的，你要先完整复述内容。
+                    2. 整合信息并分析后认为统计结果。
             提供指标：
                 {input_info}    
             """,
@@ -551,5 +575,7 @@ def get_tools():
             machine_learning_train,
             machine_learning_train_BayesSearch,
             get_stock_data_for_model,
-            stock_data_model
+            stock_data_model,
+            save_to_knowledge_base,
+            delete_memory
             ]
