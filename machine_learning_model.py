@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, plot_tree
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingClassifier, \
@@ -44,7 +44,7 @@ class model_choice:
                 "梯度提升树": GradientBoostingRegressor,
                 "支持向量机": SVR,
             }
-        elif self.mode == '分类':
+        else :
             self.model_dict = {
                 "KNN": KNeighborsClassifier,
                 "逻辑回归": LogisticRegression,
@@ -211,8 +211,25 @@ class model_choice:
         贝叶斯搜索
         :return:
         """
+        from skopt import BayesSearchCV
+        from skopt.space import Real, Integer, Categorical  # 定义参数搜索空间
+        from param import get_model_param_spaces
+        param_space = get_model_param_spaces()[self.mode][self.model_name]
+        # 2. 定义交叉验证
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
+        # 3. 初始化BayesSearchCV（注意参数名是search_spaces，不是param_grid）
+        bayes_search = BayesSearchCV(
+            estimator=self.model,
+            search_spaces=param_space,  # 这里用search_spaces，而非param_grid
+            cv=cv,
+            n_iter=5,  # 搜索5次（刚好覆盖所有可能的奇数，实际可根据需要增加）
+            random_state=42
+        )
+        bayes_search.fit(self.x_train,self.y_train)
 
+        self.model = bayes_search.best_estimator_
+        return bayes_search.best_params_
     def load_model(self,save_path="./machien_learning_model/梯度提升树_20251116_001219.joblib"):
         self.model = joblib.load(save_path)
 

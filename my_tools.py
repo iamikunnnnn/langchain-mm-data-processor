@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
+import akshare as ak
 import pandas as pd
 import requests
 from baidusearch.baidusearch import search
@@ -14,14 +15,12 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 from pydantic import BaseModel, Field
-from sympy.parsing.latex import parse_latex
 
 from data_preprocessing import DataPreprocessor
-from utils import load_config
 from machine_learning_model import model_choice
 from param import get_ML_param, convert_to_json_string
+from utils import load_config
 
 config = load_config()
 
@@ -33,35 +32,112 @@ class columnInput(BaseModel):
     columns: str = Field(..., description="需要填充空值的列名")
 
 
-# 1. 定义多参数的 schema（Pydantic 模型）
-class MachineLearningTrainInput(BaseModel):
-    model_name: str = Field(
-        ...,  # 表示必填参数
-        description="model_name，必须是以下之一：['KNN', '线性回归', '决策树', '随机森林', '梯度提升树', '支持向量机']"
-    )
-    X_columns: str = Field(
-        ...,
-        description="X_columns，多个列名用逗号分隔（如 'age,income'）"
-    )
-    y_column: str = Field(
-        ...,
-        description="y_column，单个列名（如 'label'）"
-    )
-    mode: str = Field(
-        ...,
-        description="mode，必须是 '回归' 或 '分类'"
-    )
-    # param_dict: str = Field(
-    #     description="param_dict，例如：'{\"n_estimators\": 100, \"max_depth\": 5}' 或 '{param: num, param2: true}'"
-    # )
-
-
 # 加载FAISS知识库
 embedding = HuggingFaceEmbeddings(model_name=config["embedding"]["model"])
 
 vector_db = FAISS.load_local("faiss_index", embedding,
                              allow_dangerous_deserialization=True)  # 加载已存储的索引
 
+
+@tool("get_stock_data_for_model",description="获取股票数据",return_direct=True)
+def get_stock_data_for_model(code: str, start_date: str = '20200101', end_date: str = None) :
+    """
+    获取股票数据
+    Args:
+        code (str): 股票代码，如 '600036'。
+        start_date (str): 开始日期 'YYYYMMDD',非必填。
+    Returns:DataFrame
+    """
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y%m%d")
+
+    print(f"正在获取 {code} 的历史数据...")
+
+    try:
+        # 1. 获取历史行情 (使用 stock_zh_a_hist 接口，它是目前akshare获取A股日线的主力接口)
+        # adjust="qfq" 非常重要：前复权，保证价格连续性，适合建模
+        df = ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+
+        if df.empty:
+            raise ValueError("未获取到数据")
+
+        # 2. 数据清洗与重命名
+        # akshare返回的列名通常是中文，建议转为英文方便模型处理
+        df = df.rename(columns={
+            '日期': 'date',
+            '开盘': 'open',
+            '收盘': 'close',
+            '最高': 'high',
+            '最低': 'low',
+            '成交量': 'volume',
+            '成交额': 'amount',
+            '振幅': 'amplitude',
+            '涨跌幅': 'pct_chg',
+            '换手率': 'turnover'
+        })
+
+        # 设置日期索引
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+        df.sort_index(inplace=True)
+
+        # 只保留数值列
+        numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'amount', 'amplitude', 'pct_chg', 'turnover']
+        df = df[numeric_cols]
+
+        # -------------------------- 3. 特征工程 (Feature Engineering) --------------------------
+        # 时间序列模型不仅需要原始价格，通常还需要技术指标作为特征
+
+        # A. 移动平均线 (Moving Averages) - 捕捉趋势
+        for window in [5, 10, 20, 60]:
+            df[f'ma_{window}'] = df['close'].rolling(window=window).mean()
+
+        # B. 相对强弱指标 (RSI) - 捕捉超买超卖
+        # 简单的RSI计算实现
+        def calculate_rsi(series, period=14):
+            delta = series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            return 100 - (100 / (1 + rs))
+
+        df['rsi_6'] = calculate_rsi(df['close'], 6)
+        df['rsi_12'] = calculate_rsi(df['close'], 12)
+
+        # C. MACD (平滑异同移动平均线) - 捕捉动量
+        # EMA 计算
+        ema12 = df['close'].ewm(span=12, adjust=False).mean()
+        ema26 = df['close'].ewm(span=26, adjust=False).mean()
+        df['macd_dif'] = ema12 - ema26
+        df['macd_dea'] = df['macd_dif'].ewm(span=9, adjust=False).mean()
+        df['macd_bar'] = 2 * (df['macd_dif'] - df['macd_dea'])
+
+        # D. 布林带 (Bollinger Bands) - 捕捉波动率
+        df['boll_mid'] = df['close'].rolling(window=20).mean()
+        df['boll_std'] = df['close'].rolling(window=20).std()
+        df['boll_upper'] = df['boll_mid'] + 2 * df['boll_std']
+        df['boll_lower'] = df['boll_mid'] - 2 * df['boll_std']
+
+        # -------------------------- 4. 数据清理 --------------------------
+        # 计算技术指标会产生 NaN (例如MA20的前19天是空的)，建模前需要删除
+        df.dropna(inplace=True)
+
+        print(f"数据处理完成，共 {len(df)} 条记录，特征数: {df.shape[1]}")
+        df.to_csv(f"temp/stock_data.csv")
+        return "已获取相关股票信息，保存至temp/stock_data.csv"
+
+    except Exception as e:
+        print(f"发生错误: {e}")
+
+@tool("stock_data_model",return_direct=True)
+def stock_data_model():
+    """
+    当用户需要训练股票模型时调用，只能用于训练预测股票的模型
+    :return:
+    """
+    from stock_model_train import train_model
+    stock_model_dict =train_model(f"temp/stock_data.csv")
+    return stock_model_dict
 
 @tool("search_knowledge", description="必须用于从本地知识库获取答案,该工具必须优先使用")
 def search_knowledge(query: str) -> str:
@@ -114,29 +190,6 @@ def clear_data(tmp=None) -> str:
     progressor = None
     return "数据表实例已成功删除"
 
-
-@tool("get_weather")
-def get_weather(city):
-    """
-    查询指定城市的实时天气信息
-    :param city: 城市名称
-    :return: 返回一个字符串，指定城市的当前温度和天气
-    """
-    try:
-        url = f"http://wttr.in/{city}?format=j1"
-        response = requests.get(url)
-        data = response.json()
-        if "current_condition" in data:
-            temp = data["current_condition"][0]["temp_C"]
-            weather = data["current_condition"][0]["weatherDesc"][0]["value"]
-            print(f"{city}当前温度：{temp}°C，天气：{weather}")
-            return f"{city}当前温度：{temp}°C，天气：{weather}"
-        else:
-            return f"无法获取{city}的天气信息"
-    except Exception as e:
-        return f"查询天气时出错: {str(e)}"
-
-
 @tool("get_current_time", return_direct=True)
 def get_current_time(a=None):
     """
@@ -188,70 +241,6 @@ def get_coordinate(address):
     else:
         return None
 
-
-@tool("navigation")
-def navigation(origin, destination):
-    """
-    导航工具，输入起点和目标地点
-    :param origin: 起始地点
-    :param destination: 目标地点
-    :return: 导航总距离、预计时间、下一步操作、下一步操作的行进距离
-    """
-    print(origin)
-    print(destination)
-    origin = get_coordinate(origin)
-    destination = get_coordinate(destination)
-    api_key = config["api"]["gaode_api_key"]
-    params = {
-        "key": api_key,
-        "origin": origin,
-        "destination": destination
-    }
-    url = f"https://restapi.amap.com/v3/direction/driving"
-    response = requests.get(url, params=params)
-    data = response.json()
-    if data["status"] == "1" and data["count"] != "0":
-        # print(data)
-        # 获取速度最快的路线（已明确唯一，直接取第一条）
-        fastest_route = data["route"]["paths"][0]
-
-        # 解析总距离、总时间
-        total_distance = int(fastest_route["distance"])
-        total_time_min = int(fastest_route["duration"]) // 60
-        distance_str = f"{total_distance}米（约{total_distance / 1000:.1f}公里）"
-
-        # 解析下一步导航指令（第一步）
-        first_step = fastest_route["steps"][0]
-        next_instruction = first_step["instruction"]
-        next_distance = first_step["distance"]  # 第一步距离
-        return f"distance_str:{distance_str}, total_time_min:{total_time_min}, next_instruction:{next_instruction},next_distance: {next_distance}"
-    else:
-        print("导航失败")
-        return
-
-
-@tool("calculate", return_direct=True)
-def calculate(latex_expr: str) -> str:
-    """
-    需要计算数学式子时使用该工具，输入{input}，用于计算任意 LaTeX 数学表达式并返回数值字符串。
-    支持 /sin、/cos、/log、矩阵、积分、求和等所有 SymPy 能识别的 LaTeX 语法。
-    :param latex_expr: LaTeX 数学表达式
-    :return: 计算结果
-
-    """
-    try:
-        # LaTeX -> SymPy
-        expr = parse_latex(latex_expr)
-        # 求值
-        value = expr.evalf()
-        # 去掉浮点末尾的 .0
-        if value == int(value):
-            return str(int(value))
-        return str(float(value))
-    except Exception as e:
-        return latex_expr
-
-
 @tool("dataframe_analyse", return_direct=True)
 def dataframe_analyse(tmp=None):
     """
@@ -259,7 +248,43 @@ def dataframe_analyse(tmp=None):
     :return: {"形状","列名","空值数量","重复行数量"}
     """
     if isinstance(progressor, DataPreprocessor):
-        return progressor.get_basic_info()
+        input_info = progressor.get_basic_info()
+        # 1. 初始化 (使用单个 LLM)
+        llm = ChatOpenAI(
+            base_url="https://api.siliconflow.cn/v1",
+            openai_api_key="sk-xtgeyahfmjxvrxjygvnwfywbezskstroipqofybruqldkgor",
+            model= "Qwen/Qwen3-VL-32B-Thinking"
+        )
+
+
+        # 3. Prompt 模板
+        prompt_template = PromptTemplate(
+            template="""
+            你是一名统计学专家，专门用于分析数据，你需要判断数据的各个指标的意义，保留有意义的信息，不需要分析，而是做信息过滤。
+            核心任务是：
+                    1. 首先最重要的，你要先完整复述：all_cols、前二行数据、形状
+                    2. 整合信息并展示你分析后认为有用的信息。
+                    4. 剔除冗余 / 无意义信息;
+
+            核心目标：
+                1.你传递出去的信息足以让别人在看不到数据的情况下，能够完成接下来的统计学建模或者机器学习建模。
+
+            提供指标：
+                {input_info}    
+            """,
+            input_variables =["input_info"]
+        )
+        # 4. 构建链条 (单次调用)
+        chain = prompt_template | llm | StrOutputParser()
+        # 5. 执行链条
+        llm_output = chain.invoke({
+            "input_info": input_info,
+
+        })
+        return llm_output
+
+
+
 
 
 @tool("get_dummy", args_schema=columnInput)
@@ -420,10 +445,11 @@ def drop_columns(columns):
         return f"错误：{e}"
 
 
-@tool("machine_learning_train")
+@tool("machine_learning_train",return_direct=True)
 def machine_learning_train(query: str):
     """
-    当需要训练模型时调用该工具，输入包含训练模型需要的model_name、X_columns、y_column、mode、model_param等信息的查询文本
+    1. 当需要训练模型时，且参数明确时，调用该工具，固定参数的单次模型训练。输入只有一个{query}，需要结合用户需求完成query输入，query的内容需包含：model_name（模型名称）、X_columns（特征列名，用逗号分隔）、y_column（目标列名）、mode（'分类'或'回归'）、model_param(模型对应需要的参数)等信息。不可与machine_learning_train_BayesSearch同时调用。"
+    2. 该工具和machine_learning_train_BayesSearch只能调用一个，不可一起调用
     :param query: 用户关于模型训练的查询（例如："用随机森林做回归，特征列是Age,Score，目标列是Salary，参数n_estimators=100"）
     """
     global model  # 声明全局变量
@@ -444,12 +470,44 @@ def machine_learning_train(query: str):
 
     model.init_model()
     model.my_train_test_split()
-    model.train()
+    model.train_bayesian_search()
     model.download_model("./machine_learning_model")
     model_name, dict = model.evaluate()
 
     return f"{model_name}模型训练完毕，已保存至./machine_learning_model。模型评估结果为\n{dict}"
 
+@tool(
+    "machine_learning_train_BayesSearch",
+    return_direct=True)
+def machine_learning_train_BayesSearch(query: str,):
+    """
+    贝叶斯搜索调参工具，用于参数不明确时的模型训练。固定参数的单次模型训练。输入只有一个{query}，需要结合用户需求完成query输入，query的内容需包含：model_name（模型名称）、X_columns（特征列名，用逗号分隔）、y_column（目标列名）、mode（'分类'或'回归'）等信息。不可与machine_learning_train_BayesSearch同时调用。"
+    输入示例："用随机森林做回归，特征列是Age,Score，目标列是Salary"
+    约束：与machine_learning_train互斥，只能调用其中一个。
+    """
+    global model  # 声明全局变量
+    data = pd.read_csv("./temp/temp.csv")
+    param_list = get_ML_param(query)
+    param_dict = convert_to_json_string(param_list)
+    param_dict = json.loads(param_dict)
+    model_name = param_dict["model_name"]
+    X_columns = param_dict["X_columns"].split(',')  # 拆成列表
+    y_column = param_dict["y_column"]
+    mode = param_dict["mode"]
+    model_param = param_dict["model_param"]
+    model_param = model_param.replace("\\", "")  # 注意：这里要写两个反斜杠表示一个实际的反斜杠
+    model_param = json.loads(model_param)
+    from machine_learning_model import model_choice
+    model = model_choice(data=data, model_name=model_name, X_columns=X_columns, y_column=y_column, mode=mode,
+                         model_param=model_param)
+
+    model.init_model()
+    model.my_train_test_split()
+    best_params = model.train_bayesian_search()
+    model.download_model("./machine_learning_model")
+    model_name, dict = model.evaluate()
+
+    return f"{model_name}模型训练完毕，已保存至./machine_learning_model。模型评估结果为\n{dict}，最优参数为{best_params}"
 
 def fig_to_base64(fig):
     buf = io.BytesIO()
@@ -476,10 +534,9 @@ def visualization():
 
 
 def get_tools():
-    return [get_weather,
+    return [
             get_current_time,
-            web_search, navigation,
-            calculate,
+            web_search,
             dataframe_analyse,
             get_dummy,
             init_data,
@@ -491,5 +548,8 @@ def get_tools():
             Label_Encoding,
             Standard_Scaling,
             drop_columns,
-            machine_learning_train
+            machine_learning_train,
+            machine_learning_train_BayesSearch,
+            get_stock_data_for_model,
+            stock_data_model
             ]

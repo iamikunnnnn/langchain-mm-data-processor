@@ -20,10 +20,7 @@ if "history" not in st.session_state:
     st.session_state.history = []  # 对话历史
 if "is_voice_mode" not in st.session_state:
     st.session_state.is_voice_mode = False  # 是否开启语音模式
-if "polling" not in st.session_state:
-    st.session_state.polling = False  # 是否正在轮询
-if "voice_result_received" not in st.session_state:
-    st.session_state.voice_result_received = False  # 是否已收到语音结果
+
 
 
 # 后端接口配置（与 FastAPI 对应）
@@ -31,7 +28,7 @@ FASTAPI_URL = "http://127.0.0.1:8000"
 CHAT_ENDPOINT = f"{FASTAPI_URL}/chat"
 RAG_ENDPOINT = f"{FASTAPI_URL}/chat/rag"
 VISUALIZATION_ENDPOINT = f"{FASTAPI_URL}/chat/visualization"
-VOICE_RESULT_ENDPOINT = f"{FASTAPI_URL}/voice_result"
+
 
 st.session_state.is_voice_mode = False
 
@@ -216,48 +213,8 @@ try:
         response.raise_for_status()
 
         # 显示“启动成功”提示
-        st.session_state.history.append({"role": "human", "content": "已启动语音模式，请说出唤醒词...", "type": "text"})
-        st.chat_message("human").markdown("已启动语音模式，请说出唤醒词...")
-        # 第二步：开始轮询查询结果（设置轮询状态为 True）
-        st.session_state.polling = True
-        st.session_state.voice_result_received = False
-        polling_count = 0  # 轮询计数器（避免无限轮询）
-        max_polls = 60  # 最大轮询次数（60次 × 1秒 = 1分钟超时）
-        # 轮询循环：每秒查询一次 /voice_result 接口
-        while st.session_state.polling and polling_count < max_polls:
-            try:
-                # 调用结果查询接口
-                result_response = requests.get(VOICE_RESULT_ENDPOINT)
-                result_data = result_response.json()
-                # 情况1：已获取到语音结果
-                if "response" in result_data and result_data["response"] is not None:
-                    st.session_state.history.append({
-                        "role": "assistant",
-                        "content": result_data["response"],
-                        "type": "text"
-                    })
-                    st.session_state.voice_result_received = True
-                    st.session_state.polling = False  # 停止轮询
-                    break
-                # 情况2：未获取到结果（继续轮询）
-                else:
-                    polling_count += 1
-                    # 显示轮询状态（用空消息占位，避免重复渲染）
-                    with st.spinner(f"等待语音对话完成...（{polling_count}/{max_polls}）"):
-                        time.sleep(1)  # 每秒查询一次
-            except Exception as e:
-                st.warning(f"轮询失败：{str(e)}，将继续尝试...")
-                time.sleep(1)
-                polling_count += 1
-        # 轮询结束处理
-        if st.session_state.voice_result_received:
-            st.success("语音对话完成！")
-            st.rerun()  # 刷新显示AI回复
-        else:
-            st.error("轮询超时，未获取到语音结果（请检查唤醒词是否触发、后端是否正常运行）")
-            # 重置状态
-            st.session_state.polling = False
-            st.session_state.voice_result_received = False
+        st.chat_message("human").info("已启动语音模式，请说出唤醒词...")
+
     if st.button("关闭语音监听"):
         st.session_state.is_voice_mode = True
         # 第一步：发送请求启动 FastAPI 语音监听（mode=voice）
@@ -268,15 +225,9 @@ try:
         )
         print(response.json())
         response.raise_for_status()
+        st.chat_message("human").info("已关闭语音模式")
 
 except ValueError as e:
     st.error(f"启动语音模式失败：{str(e)}")
 finally:
     st.session_state.is_voice_mode = False
-
-# 手动停止轮询按钮（可选，提升用户体验）
-if st.session_state.polling:
-    if st.button("停止轮询"):
-        st.session_state.polling = False
-        st.success("已停止轮询")
-        st.rerun()

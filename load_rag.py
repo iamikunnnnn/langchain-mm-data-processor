@@ -5,7 +5,7 @@ from langchain_community.document_loaders import (
     PyPDFLoader, CSVLoader, TextLoader, UnstructuredMarkdownLoader,
     JSONLoader, BSHTMLLoader, UnstructuredExcelLoader, PythonLoader
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
+from langchain_text_splitters import RecursiveCharacterTextSplitter, Language,RecursiveJsonSplitter
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -30,6 +30,10 @@ class LoadRag:
             chunk_size=200,
             chunk_overlap=40,
             keep_separator=True
+        )
+        self.json_splitter = RecursiveJsonSplitter(
+            max_chunk_size=300,  # 每个分块的最大字符数（默认300）
+            min_chunk_size=100,  # 每个分块的最小字符数（默认100，避免过碎）
         )
         self.python_splitter = RecursiveCharacterTextSplitter.from_language(
             language=Language.PYTHON,
@@ -59,6 +63,7 @@ class LoadRag:
                 splitter = self.chinese_splitter  # TXT优先用中文分割器
             elif file_extension == ".json":
                 loader = JSONLoader(file_path, jq_schema=".",text_content=False)
+                splitter = self.json_splitter
             elif file_extension == ".html":
                 loader = BSHTMLLoader(file_path)
             elif file_extension == ".xlsx":

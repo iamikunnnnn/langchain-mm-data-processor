@@ -97,9 +97,9 @@ class Recorder:
                 channels=self.CHANNELS
             )
             audio.export(self.output_file, format="mp3", bitrate="128k")
-            print(f"录音保存为 {self.output_file}")
+            logging.info(f"录音保存为 {self.output_file}")
         except Exception as e:
-            print(f"保存录音失败: {e}")
+            logging.error(f"保存录音失败: {e}")
 
 
 class SoundToText:
@@ -301,7 +301,6 @@ class voice_ChatBot(ChatBot):
         Args:
             user_input: 用户输入的文本
             enable_voice: 是否启用语音播报
-
         Returns:
             str: 完整的机器人回复文本
         """
@@ -324,12 +323,13 @@ class voice_ChatBot(ChatBot):
                     for event in self.agent.stream(
                             {"messages": [{"role": "user", "content": user_input}]},
                             config={"configurable": {"thread_id": self.thread_id}},
-                            stream_mode="values"
-                    ):
+                            stream_mode="values"):
+
                         # 获取最新的消息
                         messages = event.get("messages", [])
                         if messages:
                             last_message = messages[-1]
+
                             # 只处理 AI 的回复
                             if hasattr(last_message, 'content') and last_message.type == 'ai':
                                 chunk_text = last_message.content

@@ -17,7 +17,7 @@ class WakeWordDetector:
     基于 Vosk 的唤醒词检测器
     支持中文唤醒词，通过拼音匹配实现
     """
-    def __init__(self, sample_rate=config["speech_recognition"]["sample_rate"], model_path='models/vosk-model-small-cn-0.22'):
+    def __init__(self, sample_rate=config["speech_recognition"]["sample_rate"], model_path='vosk/vosk-model-small-cn-0.22'):
         """
         初始化唤醒词检测器
 

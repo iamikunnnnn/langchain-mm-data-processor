@@ -127,7 +127,149 @@ def param_options_map():
     }
 
 
+from skopt.space import Integer, Real, Categorical
 
+
+from skopt.space import Integer, Real, Categorical
+
+from skopt.space import Real, Integer, Categorical
+
+
+def get_model_param_spaces():
+    """
+    为分类/回归模型提供可用于 BayesSearchCV 的参数空间
+    所有搜索空间均已确保 sklearn 与 skopt 完全兼容
+    """
+
+    return {
+
+        "分类": {
+
+            "KNN": {
+                "n_neighbors": Categorical([3,5,7,9,11,13,15,17,19,21]),
+                "weights": Categorical(["uniform", "distance"]),
+                "p": Integer(1, 2),
+                "metric": Categorical(["minkowski", "chebyshev"])
+            },
+
+            "逻辑回归": {
+                # C 范围
+                "C": Real(0.01, 100, prior="log-uniform"),
+
+                # penalty/solver 组合需要手动避免非法组合
+                "penalty": Categorical(["l1", "l2", "elasticnet"]),
+
+                # saga 支持 l1/l2/elasticnet, liblinear 支持 l1/l2
+                "solver": Categorical(["liblinear", "saga"]),
+
+                # 仅 elasticnet 使用，但 skopt 会自动跳过无效参数组合
+                "l1_ratio": Real(0.0, 1.0),
+
+                "class_weight": Categorical(["balanced", None])
+            },
+
+            "决策树": {
+                "max_depth": Integer(3, 15),
+                "min_samples_split": Real(0.01, 0.5, prior="log-uniform"),
+                "min_samples_leaf": Real(0.01, 0.2, prior="log-uniform"),
+                "criterion": Categorical(["gini", "entropy"]),
+                "class_weight": Categorical(["balanced", None])
+            },
+
+            "随机森林": {
+                "n_estimators": Integer(50, 300),
+                "max_depth": Integer(5, 20),
+                "min_samples_split": Real(0.01, 0.3, prior="log-uniform"),
+                "min_samples_leaf": Real(0.01, 0.1, prior="log-uniform"),
+                "max_features": Categorical(["sqrt", "log2"]),
+                "bootstrap": Categorical([True, False]),
+                "class_weight": Categorical(["balanced", "balanced_subsample", None])
+            },
+
+            "梯度提升树": {
+                "n_estimators": Integer(100, 500),
+                "learning_rate": Real(0.001, 0.3, prior="log-uniform"),
+                "max_depth": Integer(3, 10),
+                "min_samples_split": Real(0.01, 0.2, prior="log-uniform"),
+                "subsample": Real(0.6, 1.0),
+                "max_features": Categorical(["sqrt", "log2"]),
+                "loss": Categorical(["log_loss", "deviance"])
+            },
+
+            "支持向量机": {
+                "C": Real(0.1, 100, prior="log-uniform"),
+                "kernel": Categorical(["linear", "poly", "rbf", "sigmoid"]),
+
+                # 不能用 Categorical + Real，需要手动列举
+                "gamma": Categorical(
+                    ["scale", "auto", 0.001, 0.01, 0.1, 1, 10]
+                ),
+
+                "degree": Integer(2, 5),
+                "class_weight": Categorical(["balanced", None]),
+                "probability": Categorical([True])  # 固定开启
+            }
+        },
+
+        # =======================================================================================
+        "回归": {
+
+            "KNN": {
+                "n_neighbors": Categorical([3,5,7,9,11,13,15,17,19,21]),
+                "weights": Categorical(["uniform", "distance"]),
+                "p": Integer(1, 2),
+                "metric": Categorical(["minkowski", "chebyshev"])
+            },
+
+            "线性回归": {
+                "fit_intercept": Categorical([True, False]),
+                "normalize": Categorical([True, False]),
+                "copy_X": Categorical([True, False])
+            },
+
+            "决策树": {
+                "max_depth": Integer(3, 15),
+                "min_samples_split": Real(0.01, 0.5, prior="log-uniform"),
+                "min_samples_leaf": Real(0.01, 0.2, prior="log-uniform"),
+                "criterion": Categorical(["squared_error", "absolute_error"]),
+                "splitter": Categorical(["best", "random"])
+            },
+
+            "随机森林": {
+                "n_estimators": Integer(50, 300),
+                "max_depth": Integer(5, 20),
+                "min_samples_split": Real(0.01, 0.3, prior="log-uniform"),
+                "min_samples_leaf": Real(0.01, 0.1, prior="log-uniform"),
+                "max_features": Categorical(["sqrt", "log2"]),
+                "bootstrap": Categorical([True, False]),
+                "criterion": Categorical(["squared_error", "absolute_error"])
+            },
+
+            "梯度提升树": {
+                "n_estimators": Integer(100, 500),
+                "learning_rate": Real(0.001, 0.3, prior="log-uniform"),
+                "max_depth": Integer(3, 10),
+                "min_samples_split": Real(0.01, 0.2, prior="log-uniform"),
+                "subsample": Real(0.6, 1.0),
+                "max_features": Categorical(["sqrt", "log2"]),
+                "loss": Categorical(["squared_error", "absolute_error"])
+            },
+
+            "支持向量机": {
+                "C": Real(0.1, 100, prior="log-uniform"),
+                "kernel": Categorical(["linear", "poly", "rbf", "sigmoid"]),
+                "gamma": Categorical(
+                    ["scale", "auto", 0.001, 0.01, 0.1, 1, 10]
+                ),
+                "degree": Integer(2, 5),
+                "epsilon": Real(0.01, 1.0)
+            }
+        }
+    }
+
+
+# 使用示例：获取分类任务中"随机森林"的参数空间
+param_spaces = get_model_param_spaces()
 param_types = param_types()
 param_options_map = param_options_map()
 
@@ -177,14 +319,14 @@ def validate_enum_params(model_name, params_dict, param_options_map):
 
 def get_ML_param(query: str):
     """
-    优化后的机器学习训练任务解析器 (已修复 KeyError)
+    优化后的机器学习训练任务解析器
     """
 
     # 1. 初始化 (使用单个 LLM)
     llm = ChatOpenAI(
         base_url="https://api.siliconflow.cn/v1",
         openai_api_key="sk-xtgeyahfmjxvrxjygvnwfywbezskstroipqofybruqldkgor",
-        model="Qwen/Qwen2.5-7B-Instruct"
+        model="Qwen/Qwen3-VL-32B-Thinking"
     )
 
     # 2. 将参数定义转换为字符串，注入到 Prompt
@@ -195,27 +337,27 @@ def get_ML_param(query: str):
     # 3. 优化后的 Prompt 模板
     prompt_template = PromptTemplate(
         template="""你是一名机器学习任务解析器。请将用户的任务描述严格转换为 JSON 格式。
-# 任务
-从用户的 `{query}` 中提取以下5个字段：
-
-1.  `model_name`: 必须从以下列表中选择：{valid_models}
-2.  `X_columns`: 特征列 (必须是字符串列表)
-3.  `y_columns`: 目标列 (必须是单个字符串)
-4.  `mode`: 任务模式 (必须是 "分类" 或 "回归")
-5.  `model_param`: 参数字典 (必须是 `{{key: value}}` 字典格式)
-
-# 参数约束 (重要)
-你必须参考以下定义来生成 `model_param`。只包含用户提到、且在定义中存在的参数。
--   **所有模型的类型定义**: {param_types}
--   **枚举参数的合法值**: {param_options}
-
-# 输出要求
--   **必须**只输出一个合法的 JSON 对象，不要包含任何 markdown 标记或解释性文字。
--   如果用户未提供 `model_param`，请输出 `{{}}`。  <-- ⭐️⭐️⭐️ 已修复 ⭐️⭐️⭐️
-
-# 用户任务
-{query}
-""",
+        # 任务
+        从用户的 `{query}` 中提取以下5个字段(如果描述比较模糊，根据意思提取，重点是保证格式正确)：
+        
+        1.  `model_name`: 必须从以下列表中选择：{valid_models}
+        2.  `X_columns`: 特征列 (必须是字符串列表)
+        3.  `y_columns`: 目标列 (必须是单个字符串)
+        4.  `mode`: 任务模式 (必须是 "分类" 或 "回归",必须是中文)
+        5.  `model_param`: 参数字典 (必须是 `{{key: value}}` 字典格式)
+        
+        # 参数约束 (重要)
+        你必须参考以下定义来生成 `model_param`。只包含用户提到、且在定义中存在的参数。
+        -   **所有模型的类型定义**: {param_types}
+        -   **枚举参数的合法值**: {param_options}
+        
+        # 输出要求
+        -   **必须**只输出一个合法的 JSON 对象，不要包含任何 markdown 标记或解释性文字。
+        -   如果用户未提供 `model_param`，请输出 `{{}}`。
+        
+        # 用户任务
+        {query}
+        """,
         input_variables=["query", "valid_models", "param_types", "param_options"]
     )
 
@@ -324,6 +466,8 @@ def convert_to_json_string(result_list: list) -> str:
     final_json_string = json.dumps(output_dict, ensure_ascii=False, indent=2)
 
     return final_json_string
+
+
 
 if __name__ == '__main__':
     # --- 测试 (与之前相同) ---

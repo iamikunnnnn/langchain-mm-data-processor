@@ -127,14 +127,14 @@ def chat(
         }
 
 
-@app.get("/voice_result")
-def get_voice_result():
-    """单独的接口用于查询语音对话结果"""
-    with ai_agent.response_lock:
-        response = ai_agent.voice_response
-    if response is None:
-        return {"msg": "尚未获取到语音对话结果，请先触发唤醒并对话"}
-    return {"response": response}
+# @app.get("/voice_result")# 用于轮询结果，暂已不再使用
+# def get_voice_result():
+#     """单独的接口用于查询语音对话结果"""
+#     with ai_agent.response_lock:
+#         response = ai_agent.voice_response
+#     if response is None:
+#         return {"msg": "尚未获取到语音对话结果，请先触发唤醒并对话"}
+#     return {"response": response}
 
 
 @app.post("/chat/rag")
@@ -175,6 +175,7 @@ async def get_chat_visualization():
                 "predict_true_fig": base64_predict_true_fig  # 第三个图表的Base64编码字符串
             }
         }
+
 
 
 if __name__ == '__main__':

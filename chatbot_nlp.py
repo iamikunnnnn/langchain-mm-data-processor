@@ -33,7 +33,7 @@ if __name__ == '__main__':
     chatbot = nlp_chatbot()
 
     # ret7 = chatbot.get_llm_response("你好，现在几点了？")
-    ret8 = chatbot.get_llm_response("现在训练一个随机森林回归模型，特征列用'Age',目标列'Fare',调用machine_learning_train工具")
+    ret8 = chatbot.get_llm_response("对这个股票训练一个预测模型")
 
     # print("ret7",ret7)
     print("ret8",ret8)
