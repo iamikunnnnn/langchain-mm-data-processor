@@ -1,3 +1,6 @@
+"""
+为机器学习工具内部提供参数解析链
+"""
 
 # 加载你的参数定义
 import json
@@ -361,7 +364,7 @@ def get_ML_param(query: str):
         input_variables=["query", "valid_models", "param_types", "param_options"]
     )
 
-    # 4. 构建链条 (单次调用)
+    # 4. 构建链条
     chain = prompt_template | llm | StrOutputParser()
 
     # 5. 执行链条
@@ -372,7 +375,7 @@ def get_ML_param(query: str):
         "param_options": param_options_str
     })
 
-    # 6. 安全解析 JSON
+    # 6. 解析 JSON
     try:
         # 增加鲁棒性：从 LLM 可能的输出中提取 JSON 块
         match = re.search(r"\{.*\}", llm_output, re.DOTALL)
@@ -390,7 +393,7 @@ def get_ML_param(query: str):
 
     except Exception as e:
         print(f"Error: LLM 输出解析失败: {e}\nRaw output: {llm_output}")
-        # 兜底
+        # 兜底，有时候模型名字会乱码
         model_name = "随机森林"
 
     # 7. 类型转换与验证 (复用原函数)

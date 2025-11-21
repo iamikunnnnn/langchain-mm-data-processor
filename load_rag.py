@@ -33,7 +33,7 @@ class LoadRag:
         )
 
         self.chinese_splitter = RecursiveCharacterTextSplitter(
-            separators=["\n\n", "。", "！", "？", "；", "\n", "，", " "],
+            separators=["\n\n", "。", "！", "？", "；", "\n", "，", " ",","],
             chunk_size=300,
             chunk_overlap=50,
             keep_separator=True,

@@ -5,7 +5,10 @@ from scipy.stats import levene, bartlett, shapiro
 from statsmodels.stats.diagnostic import het_breuschpagan
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from itertools import combinations
-
+import statsmodels.api as sm
+from statsmodels.stats.diagnostic import het_breuschpagan
+from sklearn.linear_model import LinearRegression
+from itertools import combinations
 
 class EnhancedDataAnalyzer:
     def __init__(self, data):
@@ -93,8 +96,8 @@ class EnhancedDataAnalyzer:
         if not numeric_cols or not categorical_cols:
             return {"message": "需要同时存在数值列和分类列"}
 
-        for cat_col in categorical_cols:  # 限制前3个分类列
-            for num_col in numeric_cols:  # 限制前3个数值列
+        for cat_col in categorical_cols:
+            for num_col in numeric_cols:
                 try:
                     groups = [group[num_col].dropna() for name, group in self.data.groupby(cat_col)]
                     groups = [g for g in groups if len(g) >= 2]
@@ -123,10 +126,7 @@ class EnhancedDataAnalyzer:
         if len(numeric_cols) < 2:
             return {"message": "数值列少于2列，无法检验"}
 
-        import statsmodels.api as sm
-        from statsmodels.stats.diagnostic import het_breuschpagan
-        from sklearn.linear_model import LinearRegression
-        from itertools import combinations
+
 
         results = []
         for x_col, y_col in combinations(numeric_cols, 2):
@@ -159,11 +159,6 @@ class EnhancedDataAnalyzer:
             })
 
         return results
-
-        #
-        #     return results if results else {"message": "检验失败或数据不足"}
-        # except Exception as e:
-        #     return {"error": f"异方差性检验失败: {str(e)}"}
 
     def _correlation_analysis(self):
         """

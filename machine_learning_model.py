@@ -17,8 +17,7 @@ from sklearn.svm import SVC, SVR
 from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, classification_report, confusion_matrix
 import inspect
 from sklearn.ensemble import RandomForestClassifier
-import streamlit as st
-from sklearn import tree
+
 # 设置字体，支持中文显示
 matplotlib.rcParams["font.family"] = ["KaiTi"]
 # 解决负号显示问题（可选）

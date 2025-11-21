@@ -97,6 +97,7 @@ class ChatBot():
             middleware=[MessageTrimmerMiddleware(max_messages=15)],
 
         )
+
         # with open("create_agent_graph.png", "wb") as f:
         #     f.write(self.agent.get_graph().draw_mermaid_png())
 

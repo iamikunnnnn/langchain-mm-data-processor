@@ -36,7 +36,7 @@ if __name__ == '__main__':
     chatbot = nlp_chatbot()
 
     # ret7 = chatbot.get_llm_response("你好，现在几点了？")
-    ret8 = chatbot.get_llm_response(r"删除记忆")
+    ret8 = chatbot.get_llm_response(r"你知道我是干什么的吗")
 
     # print("ret7",ret7)
     print("ret8",ret8)
