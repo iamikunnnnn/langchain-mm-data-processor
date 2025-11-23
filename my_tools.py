@@ -32,7 +32,7 @@ class columnInput(BaseModel):
     columns: str = Field(..., description="需要填充空值的列名")
 
 
-
+from tavily import TavilyClient
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 embedding = HuggingFaceEmbeddings(model_name=config["embedding"]["model"])
@@ -41,7 +41,7 @@ vector_db = Chroma(
     embedding_function=embedding,
     persist_directory="chroma_index"
 )
-
+ANALYZE_RESULT = "无"
 @tool("delete_memory",return_direct=True)
 def delete_memory(a=None) -> str:
     """直接删除所有 Agent 记忆"""
@@ -49,7 +49,7 @@ def delete_memory(a=None) -> str:
     try:
         conn = sqlite3.connect("./checkpoints.sqlite")
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM sqlite_master WHERE thread_id=?", ("conversation_1",))
+        cursor.execute("DELETE FROM writes WHERE thread_id=?", ("conversation_1",))
         cursor.execute("DELETE FROM checkpoints WHERE thread_id=?", ("conversation_1",))
         conn.commit()
         return "所有记忆已直接删除"
@@ -72,7 +72,6 @@ def get_stock_data_for_model(code: str, start_date: str = '20200101', end_date: 
     if end_date is None:
         end_date = datetime.now().strftime("%Y%m%d")
 
-    print(f"正在获取 {code} 的历史数据...")
 
     try:
         # 1. 获取历史行情 (使用 stock_zh_a_hist 接口，它是目前akshare获取A股日线的主力接口)
@@ -230,14 +229,16 @@ def init_data(file_path):
 
 @tool("clear_data", return_direct=True)
 def clear_data(tmp=None) -> str:
-    """当用户需要切换处理的数据时，手动删除已初始化的数据表实例，无需输入任何参数"""
-    global progressor
+    """当用户没有表示需要删除数据时不允许调用，当用户需要切换处理的数据时，手动删除已初始化的数据表实例，无需输入任何参数"""
+    global progressor,ANALYZE_RESULT
+
     if progressor is None:
         return "当前没有已初始化的数据表"
     # 主动删除全局变量并释放内存
     del progressor
     # 可选：删除后重置为 None（方便后续判断状态）
     progressor = None
+    ANALYZE_RESULT = "无"
     return "数据表实例已成功删除"
 
 @tool("get_current_time", return_direct=True)
@@ -275,6 +276,7 @@ def dataframe_analyse(tmp=None):
     对表格数据进行分析,当用户存在对数据的基础分析意图时调用,同样只需调用一次，无需输入任何参数
     :return: {"形状","列名","空值数量","重复行数量"}
     """
+    global ANALYZE_RESULT
     from stat_analyse import filter_normal_stats
     if isinstance(progressor, DataPreprocessor):
         input_info = filter_normal_stats()
@@ -305,6 +307,8 @@ def dataframe_analyse(tmp=None):
             "input_info": input_info,
 
         })
+        ANALYZE_RESULT = input_info
+
         return llm_output
 
 

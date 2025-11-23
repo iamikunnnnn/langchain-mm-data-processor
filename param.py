@@ -33,8 +33,8 @@ def param_types():
         'ccp_alpha': 'float',
         'max_samples': 'int',
         },
-        # 梯度提升树 GradientBoostingRegressor / GradientBoostingClassifier
-        "梯度提升树":{
+        # XGBoost GradientBoostingRegressor / GradientBoostingClassifier
+        "XGBoost":{
         'learning_rate': 'float',
         'subsample': 'float',
         'validation_fraction': 'float',
@@ -343,7 +343,7 @@ def get_ML_param(query: str):
         # 任务
         从用户的 `{query}` 中提取以下5个字段(如果描述比较模糊，根据意思提取，重点是保证格式正确)：
         
-        1.  `model_name`: 必须从以下列表中选择：{valid_models}
+        1.  `model_name`: 必须从以下列表中选择：{valid_models}，（不一定中英文对应，可能需要翻译，但必须为valid_models内的名字）
         2.  `X_columns`: 特征列 (必须是字符串列表)
         3.  `y_columns`: 目标列 (必须是单个字符串)
         4.  `mode`: 任务模式 (必须是 "分类" 或 "回归",必须是中文)

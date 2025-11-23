@@ -5,7 +5,7 @@ import pandas as pd
 from torch.utils.data import DataLoader
 
 from data_preprocessing import StockDataset
-from my_assistant.my_tools import get_stock_data_for_model
+from my_assistant.deep_my_tools import get_stock_data_for_model
 
 # 设备配置
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

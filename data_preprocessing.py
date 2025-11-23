@@ -86,7 +86,6 @@ class DataPreprocessor:
     """
     数据预处理
     """
-
     def __init__(self, data: pd.DataFrame = None):
         """
         初始化数据预处理器

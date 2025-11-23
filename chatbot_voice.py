@@ -18,7 +18,7 @@ import pygame
 from openai import OpenAI
 from pydub import AudioSegment
 
-from chatbot import ChatBot
+from deep_chatbot import ChatBot
 from utils import load_config
 
 
@@ -295,7 +295,7 @@ class voice_ChatBot(ChatBot):
         self.logger.info(f"识别到语音: {user_input}")
         return user_input
 
-    def generate_response_streaming(self, user_input, enable_voice=False):
+    def generate_response_streaming(self, user_input, enable_voice=False,thread_id=None):
         """
         使用LangChain Agent生成流式响应
         Args:
@@ -322,7 +322,7 @@ class voice_ChatBot(ChatBot):
                     # 使用 stream 方法获取流式响应
                     for event in self.agent.stream(
                             {"messages": [{"role": "user", "content": user_input}]},
-                            config={"configurable": {"thread_id": self.thread_id}},
+                            config={"configurable": {"thread_id": thread_id}},
                             stream_mode="values"):
 
                         # 获取最新的消息
@@ -393,7 +393,7 @@ class voice_ChatBot(ChatBot):
             traceback.print_exc()
             return "抱歉,我在处理您的问题时遇到了一些困难。"
 
-    def chat(self, user_input, enable_voice=False):
+    def chat(self, user_input, enable_voice=False,thread_id=None):
         """
         统一的对话接口
 
@@ -404,7 +404,7 @@ class voice_ChatBot(ChatBot):
         Returns:
             str: 机器人的回复
         """
-        return self.generate_response_streaming(user_input, enable_voice=enable_voice)
+        return self.generate_response_streaming(user_input, enable_voice=enable_voice,thread_id=thread_id)
 
     def __del__(self):
         """析构函数,清理资源"""

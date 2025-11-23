@@ -39,20 +39,20 @@ class AIAgent:
         # 线程安全锁（处理多线程读写结果）
         self.response_lock = threading.Lock()
 
-    def _wake_callback(self):
+    def _wake_callback(self,thread_id):
         """唤醒回调函数"""
         self.logger.info("检测到唤醒词，开始录音...")
         # 启动语音对话线程（避免阻塞回调）
-        chat_thread = threading.Thread(target=self._start_voice_conversation)
+        chat_thread = threading.Thread(target=self._start_voice_conversation,args=(thread_id,))
         chat_thread.start()
 
-    def _start_voice_conversation(self):
+    def _start_voice_conversation(self,thread_id):
         """语音对话入口"""
         user_input = self.voice_chatbot.listen_and_recognize()
         if user_input:
             self.logger.info(f"用户输入: {user_input}")
             # 生成回复并语音播报
-            response = self.voice_chatbot.chat(user_input, enable_voice=True)
+            response = self.voice_chatbot.chat(user_input, enable_voice=True,thread_id=thread_id)
             # 线程安全地更新结果
             with self.response_lock:
                 self.voice_response = response
@@ -60,7 +60,7 @@ class AIAgent:
             # 对话完成后可停止监听（根据需求决定是否保持运行）
             self.stop()
 
-    def start_monitor(self):
+    def start_monitor(self,thread_id):
         if self.running:
             self.logger.warning("AI Agent已在运行中")
             return
@@ -68,23 +68,26 @@ class AIAgent:
         self.running = True
         with self.response_lock:
             self.voice_response = None
+
+        def _wrapped_wake_callback():
+            self._wake_callback(thread_id)  # 这里传入 thread_id
         # 绑定回调后，打印日志确认
-        self.wake_detector.on_wake_callback = self._wake_callback
+        self.wake_detector.on_wake_callback = _wrapped_wake_callback
         self.logger.info(f"回调函数绑定状态：{self.wake_detector.on_wake_callback is not None}")  # 验证是否绑定成功
-        self.wake_thread = threading.Thread(target=self.wake_detector.run)
+        self.wake_thread = threading.Thread(target=self.wake_detector.run,args=(thread_id,))
         self.wake_thread.start()
 
         self.logger.info(f"监听线程是否存活：{self.wake_thread.is_alive()}")  # 验证线程是否启动
 
-    def start_nlp_chatbot(self, prompt):
+    def start_nlp_chatbot(self, prompt,thread_id):
         """NLP模式处理，同步返回结果"""
-        self.nlp_response = self.nlp_chatbot.get_llm_response(prompt)
+        self.nlp_response = self.nlp_chatbot.get_llm_response(prompt,thread_id)
         print(self.nlp_response)
         return self.nlp_response
 
-    def start_cv_chatbot(self, prompt):
+    def start_cv_chatbot(self, prompt,thread_id):
         """"""
-        self.cv_response = self.cv_chatbot.get_llm_response(prompt)
+        self.cv_response = self.cv_chatbot.get_llm_response(prompt,thread_id)
 
         return self.cv_response
 
@@ -104,18 +107,19 @@ ai_agent = AIAgent()
 @app.post("/chat")
 def chat(
         prompt: Union[str, List[Dict]] = Body(..., embed=True),
+        thread_id: Union[str] = Body(..., embed=True),
         mode: Literal["nlp", "voice", "cv"] = Query("nlp")
 ):
     if mode == "nlp":
-        response = ai_agent.start_nlp_chatbot(prompt)
+        response = ai_agent.start_nlp_chatbot(prompt,thread_id)
         print(response)
         return {"response": response}
     elif mode == "cv":
-        response = ai_agent.start_cv_chatbot(prompt)
+        response = ai_agent.start_cv_chatbot(prompt,thread_id)
         print("aaa", response)
         return {"response": response}
     elif mode == "voice" and prompt == "开始语音监听":
-        ai_agent.start_monitor()
+        ai_agent.start_monitor(thread_id)
         return {
             "msg": "已启动语音模式，请说出唤醒词并对话",
             "提示": "可通过另一个接口（如/voice_result）查询结果"
@@ -125,17 +129,6 @@ def chat(
         return {
             "msg": "已关闭语音模式"
         }
-
-
-# @app.get("/voice_result")# 用于轮询结果，暂已不再使用
-# def get_voice_result():
-#     """单独的接口用于查询语音对话结果"""
-#     with ai_agent.response_lock:
-#         response = ai_agent.voice_response
-#     if response is None:
-#         return {"msg": "尚未获取到语音对话结果，请先触发唤醒并对话"}
-#     return {"response": response}
-
 
 @app.post("/chat/rag")
 async def get_chat_rag(
@@ -149,7 +142,7 @@ async def get_chat_rag(
 
 @app.post("/chat/visualization")
 async def get_chat_visualization():
-    from my_tools import visualization
+    from deep_my_tools import visualization
     import base64
     _, base64_binary_fig, base64_fit_true_fig, base64_predict_true_fig= visualization()
 
