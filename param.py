@@ -33,8 +33,8 @@ def param_types():
         'ccp_alpha': 'float',
         'max_samples': 'int',
         },
-        # XGBoost GradientBoostingRegressor / GradientBoostingClassifier
-        "XGBoost":{
+        # 梯度提升 GradientBoostingRegressor / GradientBoostingClassifier
+        "梯度提升":{
         'learning_rate': 'float',
         'subsample': 'float',
         'validation_fraction': 'float',

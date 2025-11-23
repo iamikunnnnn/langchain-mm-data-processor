@@ -109,8 +109,6 @@ class ChatBot():
 
         """
 
-
-
         # 中间件
         summarization_middleware = SummarizationMiddleware(model=ChatOpenAI(
             openai_api_key=config["api"]["openai_api_key"],
@@ -121,7 +119,7 @@ class ChatBot():
         # 创建带记忆的 Agent
         conn = sqlite3.connect("checkpoints.sqlite", check_same_thread=False)
         checkpointer = SqliteSaver(conn)  # 文件自动创建
-        # checkpointer = MemorySaver()  # 文件自动创建
+
         # 包装 Agent，在每次调用前修剪消息
         self.agent = create_agent(
             model=self.llm,
@@ -132,18 +130,8 @@ class ChatBot():
             middleware=[tool_retry_middleware, summarization_middleware,handle_tool_errors],
         )
 
-        # self.agent = create_deep_agent(
-        #     model=self.llm,
-        #     tools=self.tools,
-        #     system_prompt=system_prompt,
-        #     checkpointer=checkpointer,
-        #     # 添加消息修剪中间件
-        #     middleware=[tool_retry_middleware],  # 内置summarization_middleware
-        # )
 
         # 绘制langgraph流程图
         # with open("create_agent_graph.png", "wb") as f:
         #     f.write(self.agent.get_graph().draw_mermaid_png())
 
-        # 初始化对话线程ID
-        # self.thread_id = "test_thread"

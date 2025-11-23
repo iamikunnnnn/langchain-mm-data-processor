@@ -4,7 +4,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.tracers import ConsoleCallbackHandler
 
 from utils import load_config
-from deep_chatbot import ChatBot
+from chatbot import ChatBot
 from utils import load_config
 
 

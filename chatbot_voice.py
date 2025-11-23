@@ -18,7 +18,7 @@ import pygame
 from openai import OpenAI
 from pydub import AudioSegment
 
-from deep_chatbot import ChatBot
+from chatbot import ChatBot
 from utils import load_config
 
 
