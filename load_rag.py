@@ -133,7 +133,7 @@ class LoadRag:
         print("Chroma 向量库已完成构建并持久化！")
 
 
-# ---------------------- 使用示例 ----------------------
+
 async def main():
     file_paths = [
         r"F:\多模态智能语音助手\my_assistant\param_knowledge.md",

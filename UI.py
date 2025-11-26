@@ -195,7 +195,9 @@ if input_msg := st.chat_input("来和我聊天吧~~~", accept_file="multiple",
                 response.raise_for_status()
 
                 get_current_session()["history"].append({"role": "human", "content": input_msg.text, "type": "text"})
-                get_current_session()["history"].append({"role": "assistant", "content": response.text, "type": "text"})
+                response_data = response.json()
+                response_text = response_data.get("response", response.text)
+                get_current_session()["history"].append({"role": "assistant", "content": response_text, "type": "text"})
 
                 st.rerun()
 
@@ -246,8 +248,10 @@ if input_msg := st.chat_input("来和我聊天吧~~~", accept_file="multiple",
                             params={"mode": "cv"}
                         )
 
+                        response_data = response.json()
+                        response_text = response_data.get("response", "")
                         get_current_session()["history"].append(
-                            {"role": "assistant", "content": response.json(), "type": "text"})
+                            {"role": "assistant", "content": response_text, "type": "text"})
                         st.rerun()
                 except Exception as e:
                     st.error(e)
@@ -272,12 +276,13 @@ if input_msg := st.chat_input("来和我聊天吧~~~", accept_file="multiple",
                             },
                             params={"mode": "nlp"}
                         )
+                        response_data = response.json()
+                        response_text = response_data.get("response", "")
                         get_current_session()["history"].append(
-                            {"role": "assistant", "content": response.json(), "type": "text"})
+                            {"role": "assistant", "content": response_text, "type": "text"})
                         st.rerun()
                 except Exception as e:
                     print(e)
-
 # 语音模式
 try:
     col1, col2 = st.columns(2)

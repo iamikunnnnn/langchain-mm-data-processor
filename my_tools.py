@@ -4,6 +4,8 @@ import json
 import re
 import sqlite3
 from datetime import datetime
+from typing import Literal
+
 import aiofiles
 import akshare as ak
 import joblib
@@ -12,6 +14,7 @@ from baidusearch.baidusearch import search
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
+from tavily import TavilyClient
 
 from data_preprocessing import DataPreprocessor
 from stat_analyse import EnhancedDataAnalyzer
@@ -195,6 +198,7 @@ def save_to_knowledge_base(key_info: str) -> str:
     3. 后续对话/任务可能需要用到。
     """
     try:
+        vector_db = get_vector_db()  # 使用线程局部实例
         # 避免重复存储
         docs = vector_db.similarity_search(key_info, k=1)
         if docs and docs[0].page_content.strip() == key_info.strip():
@@ -240,88 +244,36 @@ def init_data(file_path: str, config: RunnableConfig) -> str:
     except Exception as e:
         return f"初始化失败：{str(e)}"
 
-
-@tool("clear_data", return_direct=True)
-def clear_data(config: RunnableConfig, tmp=None) -> str:
-    """删除已初始化的数据表实例"""
-    thread_id = config["configurable"].get("thread_id")
-    # 直接调用管理器清理
-    session_store.clear_session(thread_id)
-    return "数据表实例已成功删除，内存已释放"
 @tool("get_current_time", return_direct=True)
-def get_current_time(a=None):
+def get_current_time():
     """
     获取当前系统时间，无需输入参数
     :return: 返回字符串，字符串为当前时间，格式为%Y年%m月%d日 %H时%M分%S秒
     """
     return f"当前时间：{datetime.now().strftime('%Y年%m月%d日 %H时%M分%S秒')}"
 
+@tool("internet_search")
+def internet_search(
+    query: str,
+    max_results: int = 5,
+    topic: Literal["general", "news", "finance"] = "general",
+    include_raw_content: bool = False,
+):
+    """网络搜索工具"""
+    tavily_client = TavilyClient(api_key="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")
 
-def clean_abstract(text):
-    """清理摘要文本中的多余换行和空格"""
-    # 替换换行符为空格
-    text = text.replace('\n', ' ')
-    # 替换连续多个空格为单个空格
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
+    return tavily_client.search(
+        query,
+        max_results=max_results,
+        include_raw_content=include_raw_content,
+        topic=topic,
+    )
 
-
-@tool("web_search")
-def web_search(query):
-    """通过网络搜索获取信息，输入为搜索关键词"""
-    # 直接搜索无需API密钥
-    results = search(query, num_results=10)  # 找回十条
-
-    for item in results:
-        item['abstract'] = clean_abstract(item['abstract'])
-
-    return results
-#
-# @tool("dataframe_analyse", return_direct=True)
-# def dataframe_analyse(tmp=None):
-#     """
-#     对表格数据进行分析,当用户存在对数据的基础分析意图时调用,同样只需调用一次，无需输入任何参数
-#     :return: {"形状","列名","空值数量","重复行数量"}
-#     """
-#     global ANALYZE_RESULT
-#     from stat_analyse import filter_normal_stats
-#     if isinstance(progressor, DataPreprocessor):
-#         input_info = filter_normal_stats()
-#         # 1. 初始化 (使用单个 LLM)
-#         llm = ChatOpenAI(
-#             base_url="https://api.siliconflow.cn/v1",
-#             openai_api_key="sk-xtgeyahfmjxvrxjygvnwfywbezskstroipqofybruqldkgor",
-#             model= "Qwen/Qwen3-VL-32B-Thinking"
-#         )
-#
-#
-#         # 3. Prompt 模板
-#         prompt_template = PromptTemplate(
-#             template="""
-#             你是一名统计学专家，专门用于分析数据，你需要先完整复述输入的所有内容，然后在最后附上自己的分析判断
-#             核心任务是：
-#                     1. 首先最重要的，你要先完整复述内容。
-#                     2. 整合信息并分析后认为统计结果。
-#             提供指标：
-#                 {input_info}
-#             """,
-#             input_variables =["input_info"]
-#         )
-#         # 4. 构建链条 (单次调用)
-#         chain = prompt_template | llm | StrOutputParser()
-#         # 5. 执行链条
-#         llm_output = chain.invoke({
-#             "input_info": input_info,
-#
-#         })
-#         ANALYZE_RESULT = input_info
-#
-#         return llm_output
 
 @tool("get_data_info")
 def get_data_info(config:RunnableConfig):
     """
-    获取数据的基本信息，如：形状、列名、空值数量、重复行数量、前二行数据
+    获取数据的基本信息,当用户需要初步分析时调用该工具，如：形状、列名、空值数量、重复行数量、前二行数据
     :return:
     """
     # 获取当前线程/用户的 ID
@@ -992,11 +944,11 @@ def visualization():
 def get_tools():
     return [
             get_current_time,
-            web_search,
+            internet_search,
             # dataframe_analyse,
             get_dummy,
             init_data,
-            clear_data,
+
             fill_null_with_mean,
             search_knowledge,
             drop_null_rows,
