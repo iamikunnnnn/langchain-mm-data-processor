@@ -53,6 +53,26 @@ class EnhancedDataAnalyzer:
             "列统计信息": stats_info
         }
 
+    def data_info(self):
+        return {
+            "形状": self.data.shape,
+            "列名": self.data.columns.tolist(),
+            "空值数量": dict(self.data.isna().sum()),
+            "重复行数量": self.data.duplicated().sum(),
+            "前二行数据": self.data.head(2).to_dict(orient="records"),
+        }
+    def multicollinearity_info(self):
+        multicollinearity_info = self._check_multicollinearity(self.numeric_cols)
+        return multicollinearity_info
+    def homogeneity_info(self):
+        homogeneity_info = self._check_homogeneity()
+        return homogeneity_info
+    def correlation_analysis(self):
+        correlation_analysis = self._correlation_analysis()
+        return correlation_analysis
+    def stats_info(self):
+        stats_info = self._calculate_column_statistics()
+        return stats_info
     def _check_multicollinearity(self, numeric_cols):
         """
         多重共线性检验 - VIF (Variance Inflation Factor)

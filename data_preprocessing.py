@@ -407,3 +407,314 @@ class DataPreprocessor:
             return "DataPreprocessor(无数据)"
         else:
             return f"DataPreprocessor(数据形状: {self.data.shape})"
+    #------------------------------------------------新增功能--------------
+    def detect_outliers_iqr(self, columns: Union[str, List[str], None] = None, threshold: float = 1.5) -> dict:
+        """
+        使用IQR方法检测异常值
+        :param columns: 要检查的列，None表示检查所有数值列
+        :param threshold: IQR倍数阈值，默认1.5
+        :return: dict: 异常值信息
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if columns is None:
+            columns = self.data.select_dtypes(include=[np.number]).columns.tolist()
+        elif isinstance(columns, str):
+            columns = [columns]
+
+        outlier_info = {}
+        for col in columns:
+            if col not in self.data.columns:
+                continue
+            if not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            Q1 = self.data[col].quantile(0.25)
+            Q3 = self.data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - threshold * IQR
+            upper_bound = Q3 + threshold * IQR
+
+            outliers = self.data[(self.data[col] < lower_bound) | (self.data[col] > upper_bound)]
+            outlier_info[col] = {
+                "异常值数量": len(outliers),
+                "异常值占比": f"{len(outliers) / len(self.data) * 100:.2f}%",
+                "下界": lower_bound,
+                "上界": upper_bound
+            }
+
+        return outlier_info
+
+    def remove_outliers_iqr(self, columns: Union[str, List[str], None] = None,
+                            threshold: float = 1.5) -> 'DataPreprocessor':
+        """
+        删除IQR方法检测到的异常值
+        :param columns: 要处理的列，None表示处理所有数值列
+        :param threshold: IQR倍数阈值
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if columns is None:
+            columns = self.data.select_dtypes(include=[np.number]).columns.tolist()
+        elif isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns or not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            Q1 = self.data[col].quantile(0.25)
+            Q3 = self.data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - threshold * IQR
+            upper_bound = Q3 + threshold * IQR
+
+            self.data = self.data[(self.data[col] >= lower_bound) & (self.data[col] <= upper_bound)]
+
+        self.data = self.data.reset_index(drop=True)
+        return self
+
+    def cap_outliers(self, columns: Union[str, List[str], None] = None, threshold: float = 1.5) -> 'DataPreprocessor':
+        """
+        使用盖帽法处理异常值（截断到边界值）
+        :param columns: 要处理的列
+        :param threshold: IQR倍数阈值
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if columns is None:
+            columns = self.data.select_dtypes(include=[np.number]).columns.tolist()
+        elif isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns or not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            Q1 = self.data[col].quantile(0.25)
+            Q3 = self.data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - threshold * IQR
+            upper_bound = Q3 + threshold * IQR
+
+            self.data[col] = self.data[col].clip(lower=lower_bound, upper=upper_bound)
+
+        return self
+
+    def normalize_minmax(self, columns: Union[str, List[str], None] = None,
+                         feature_range: tuple = (0, 1)) -> 'DataPreprocessor':
+        """
+        对指定列进行Min-Max归一化
+        :param columns: 需要归一化的列
+        :param feature_range: 归一化范围，默认(0,1)
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        scaler = MinMaxScaler(feature_range=feature_range)
+
+        if columns is None:
+            columns = self.data.select_dtypes(include=[np.number]).columns.tolist()
+        elif isinstance(columns, str):
+            columns = [columns]
+
+        numeric_columns = [col for col in columns if col in self.data.columns
+                           and pd.api.types.is_numeric_dtype(self.data[col])]
+
+        if numeric_columns:
+            self.data[numeric_columns] = scaler.fit_transform(self.data[numeric_columns])
+
+        return self
+
+    def create_lag_features(self, columns: Union[str, List[str]],
+                            lags: Union[int, List[int]] = 1) -> 'DataPreprocessor':
+        """
+        创建滞后特征（用于时间序列）
+        :param columns: 要创建滞后特征的列
+        :param lags: 滞后期数，可以是单个整数或列表
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if isinstance(columns, str):
+            columns = [columns]
+        if isinstance(lags, int):
+            lags = [lags]
+
+        for col in columns:
+            if col not in self.data.columns:
+                continue
+            for lag in lags:
+                self.data[f'{col}_lag_{lag}'] = self.data[col].shift(lag)
+
+        return self
+
+    def create_rolling_features(self, columns: Union[str, List[str]], window: int,
+                                agg_funcs: List[str] = ['mean']) -> 'DataPreprocessor':
+        """
+        创建滚动窗口特征
+        :param columns: 要处理的列
+        :param window: 窗口大小
+        :param agg_funcs: 聚合函数列表，如['mean', 'std', 'min', 'max']
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns or not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            for func in agg_funcs:
+                if func == 'mean':
+                    self.data[f'{col}_rolling_{window}_{func}'] = self.data[col].rolling(window=window).mean()
+                elif func == 'std':
+                    self.data[f'{col}_rolling_{window}_{func}'] = self.data[col].rolling(window=window).std()
+                elif func == 'min':
+                    self.data[f'{col}_rolling_{window}_{func}'] = self.data[col].rolling(window=window).min()
+                elif func == 'max':
+                    self.data[f'{col}_rolling_{window}_{func}'] = self.data[col].rolling(window=window).max()
+                elif func == 'sum':
+                    self.data[f'{col}_rolling_{window}_{func}'] = self.data[col].rolling(window=window).sum()
+
+        return self
+
+    def bin_data(self, columns: Union[str, List[str]], bins: int = 5,
+                 labels: List[str] = None) -> 'DataPreprocessor':
+        """
+        对连续变量进行分箱处理
+        :param columns: 要分箱的列
+        :param bins: 分箱数量
+        :param labels: 分箱标签
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns or not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            self.data[f'{col}_binned'] = pd.cut(self.data[col], bins=bins, labels=labels)
+
+        return self
+
+    def filter_by_condition(self, condition: str) -> 'DataPreprocessor':
+        """
+        根据条件表达式筛选数据
+        :param condition: 条件表达式，如 "age > 18 and income < 50000"
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        self.data = self.data.query(condition).reset_index(drop=True)
+        return self
+
+    def sample_data(self, n: int = None, frac: float = None, random_state: int = None) -> 'DataPreprocessor':
+        """
+        随机采样数据
+        :param n: 采样数量
+        :param frac: 采样比例（0-1之间）
+        :param random_state: 随机种子
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        self.data = self.data.sample(n=n, frac=frac, random_state=random_state).reset_index(drop=True)
+        return self
+
+    def merge_rare_categories(self, columns: Union[str, List[str]], threshold: float = 0.05,
+                              new_category: str = 'Other') -> 'DataPreprocessor':
+        """
+        合并低频类别
+        :param columns: 要处理的分类列
+        :param threshold: 频率阈值，低于此值的类别会被合并
+        :param new_category: 合并后的新类别名称
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns:
+                continue
+
+            freq = self.data[col].value_counts(normalize=True)
+            rare_categories = freq[freq < threshold].index
+            self.data[col] = self.data[col].replace(rare_categories, new_category)
+
+        return self
+
+    def log_transform(self, columns: Union[str, List[str]], add_constant: float = 1) -> 'DataPreprocessor':
+        """
+        对数变换（用于处理偏态分布）
+        :param columns: 要变换的列
+        :param add_constant: 添加常数避免log(0)
+        :return: self
+        """
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if isinstance(columns, str):
+            columns = [columns]
+
+        for col in columns:
+            if col not in self.data.columns or not pd.api.types.is_numeric_dtype(self.data[col]):
+                continue
+
+            self.data[f'{col}_log'] = np.log(self.data[col] + add_constant)
+
+        return self
+
+
+    def fill_null_with_knn(self, columns: Union[str, List[str], None] = None, n_neighbors: int = 5) -> 'DataPreprocessor':
+        """
+        使用KNN算法填充空值
+        :param columns: 要处理的列，None表示处理所有数值列
+        :param n_neighbors: KNN的邻居数量，默认5
+        :return: self
+        """
+        from sklearn.impute import KNNImputer
+
+        if self.data is None:
+            raise ValueError("没有加载数据")
+
+        if columns is None:
+            # 只处理数值列
+            numeric_cols = self.data.select_dtypes(include=[np.number]).columns.tolist()
+        else:
+            if isinstance(columns, str):
+                columns = [columns]
+            # 验证列存在且为数值类型
+            numeric_cols = [col for col in columns if col in self.data.columns
+                            and pd.api.types.is_numeric_dtype(self.data[col])]
+
+            if not numeric_cols:
+                print("警告: 没有数值列需要处理")
+                return self
+
+        # 创建KNN填充器
+        imputer = KNNImputer(n_neighbors=n_neighbors)
+
+        # 对指定的数值列进行KNN填充
+        self.data[numeric_cols] = imputer.fit_transform(self.data[numeric_cols])
+
+        return self

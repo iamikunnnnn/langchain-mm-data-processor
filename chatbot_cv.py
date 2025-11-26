@@ -6,7 +6,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from deep_chatbot import ChatBot
+from chatbot import ChatBot
 from utils import load_config
 config =load_config()
 

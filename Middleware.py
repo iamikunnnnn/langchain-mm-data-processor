@@ -1,5 +1,6 @@
 from langchain.agents.middleware import wrap_tool_call
 from langchain_core.messages import ToolMessage
+from langgraph.prebuilt.tool_node import ToolCallRequest
 
 
 @wrap_tool_call

@@ -9,6 +9,8 @@ import re
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+
+
 def param_types():
     """
     定义模型参数对应的数据类型（完整版本，去重处理）
@@ -17,121 +19,218 @@ def param_types():
         # 通用参数
         # 'random_state': 'int',
         # 'n_jobs': 'int',
-        "随机森林":{
-        # 随机森林 RandomForestRegressor / RandomForestClassifier
-        'n_estimators': 'int',
-        'criterion': 'select',
-        'max_depth': 'int',
-        'min_samples_split': 'int',
-        'min_samples_leaf': 'int',
-        'min_weight_fraction_leaf': 'float',
-        'max_features': 'select',
-        'max_leaf_nodes': 'int',
-        'min_impurity_decrease': 'float',
-        'bootstrap': 'bool',
-        'oob_score': 'bool',
-        'ccp_alpha': 'float',
-        'max_samples': 'int',
+        "随机森林": {
+            # 随机森林 RandomForestRegressor / RandomForestClassifier
+            'n_estimators': 'int',
+            'criterion': 'select',
+            'max_depth': 'int',
+            'min_samples_split': 'int',
+            'min_samples_leaf': 'int',
+            'min_weight_fraction_leaf': 'float',
+            'max_features': 'select',
+            'max_leaf_nodes': 'int',
+            'min_impurity_decrease': 'float',
+            'bootstrap': 'bool',
+            'oob_score': 'bool',
+            'ccp_alpha': 'float',
+            'max_samples': 'int',
+        },
+        "RandomForestRegressor": {
+            # 随机森林 RandomForestRegressor / RandomForestClassifier
+            'n_estimators': 'int',
+            'criterion': 'select',
+            'max_depth': 'int',
+            'min_samples_split': 'int',
+            'min_samples_leaf': 'int',
+            'min_weight_fraction_leaf': 'float',
+            'max_features': 'select',
+            'max_leaf_nodes': 'int',
+            'min_impurity_decrease': 'float',
+            'bootstrap': 'bool',
+            'oob_score': 'bool',
+            'ccp_alpha': 'float',
+            'max_samples': 'int',
         },
         # 梯度提升 GradientBoostingRegressor / GradientBoostingClassifier
-        "梯度提升":{
-        'learning_rate': 'float',
-        'subsample': 'float',
-        'validation_fraction': 'float',
-        'n_iter_no_change': 'int',
-        'tol': 'float',
-        'init': 'select',  # estimator 或 None
-        'warm_start': 'bool',
+        "梯度提升树": {
+            'learning_rate': 'float',
+            'subsample': 'float',
+            'validation_fraction': 'float',
+            'n_iter_no_change': 'int',
+            'tol': 'float',
+            'init': 'select',  # estimator 或 None
+            'warm_start': 'bool',
+        },
+        "GradientBoostingRegressor": {
+            'learning_rate': 'float',
+            'subsample': 'float',
+            'validation_fraction': 'float',
+            'n_iter_no_change': 'int',
+            'tol': 'float',
+            'init': 'select',  # estimator 或 None
+            'warm_start': 'bool',
+        },
+        "GradientBoostingClassifier": {
+            'learning_rate': 'float',
+            'subsample': 'float',
+            'validation_fraction': 'float',
+            'n_iter_no_change': 'int',
+            'tol': 'float',
+            'init': 'select',  # estimator 或 None
+            'warm_start': 'bool',
         },
         # 线性回归 LinearRegression
-        "线性回归":{
-        'fit_intercept': 'bool',
-        'normalize': 'bool',  # 已弃用
-        'copy_X': 'bool',
-        'positive': 'bool',
+        "线性回归": {
+            'fit_intercept': 'bool',
+            'normalize': 'bool',  # 已弃用
+            'copy_X': 'bool',
+            'positive': 'bool',
+        },
+        # 线性回归 LinearRegression
+        "LinearRegression": {
+            'fit_intercept': 'bool',
+            'normalize': 'bool',  # 已弃用
+            'copy_X': 'bool',
+            'positive': 'bool',
         },
         # Logistic回归 LogisticRegression
-        "逻辑回归":{
-        'penalty': 'select',
-        'dual': 'bool',
-        'C': 'float',
-        'intercept_scaling': 'float',
-        'class_weight': 'select',
-        'solver': 'select',
-        'multi_class': 'select',
-        'l1_ratio': 'float',  # elasticnet
+        "逻辑回归": {
+            'penalty': 'select',
+            'dual': 'bool',
+            'C': 'float',
+            'intercept_scaling': 'float',
+            'class_weight': 'select',
+            'solver': 'select',
+            'multi_class': 'select',
+            'l1_ratio': 'float',  # elasticnet
+        },
+        "LogisticRegression": {
+            'penalty': 'select',
+            'dual': 'bool',
+            'C': 'float',
+            'intercept_scaling': 'float',
+            'class_weight': 'select',
+            'solver': 'select',
+            'multi_class': 'select',
+            'l1_ratio': 'float',  # elasticnet
         },
         # 支持向量机 SVR / SVC
-        "支持向量机":{
-        'kernel': 'select',
-        'degree': 'int',
-        'gamma': 'select',
-        'coef0': 'float',
-        'shrinking': 'bool',
-        'cache_size': 'int',
-        'verbose': 'bool',
-        'max_iter': 'int',
-        'epsilon': 'float',  # SVR
-        'probability': 'bool',  # SVC
+        "支持向量机": {
+            'kernel': 'select',
+            'degree': 'int',
+            'gamma': 'select',
+            'coef0': 'float',
+            'shrinking': 'bool',
+            'cache_size': 'int',
+            'verbose': 'bool',
+            'max_iter': 'int',
+            'epsilon': 'float',  # SVR
+            'probability': 'bool',  # SVC
+        },
+        # 支持向量机 SVR / SVC
+        "SVR": {
+            'kernel': 'select',
+            'degree': 'int',
+            'gamma': 'select',
+            'coef0': 'float',
+            'shrinking': 'bool',
+            'cache_size': 'int',
+            'verbose': 'bool',
+            'max_iter': 'int',
+            'epsilon': 'float',  # SVR
+            'probability': 'bool',  # SVC
+        },
+        "SVC": {
+            'kernel': 'select',
+            'degree': 'int',
+            'gamma': 'select',
+            'coef0': 'float',
+            'shrinking': 'bool',
+            'cache_size': 'int',
+            'verbose': 'bool',
+            'max_iter': 'int',
+            'epsilon': 'float',  # SVR
+            'probability': 'bool',  # SVC
         },
         # 决策树 DecisionTreeRegressor / DecisionTreeClassifier
         'splitter': 'select',
 
-        "决策树":{
-        # KNN KNeighborsRegressor / KNeighborsClassifier
-        'n_neighbors': 'int',
-        'weights': 'select',
-        'algorithm': 'select',
-        'leaf_size': 'int',
-        'p': 'int',
-        'metric': 'select',
-        'metric_params': 'dict',
+        "决策树": {
+            # KNN KNeighborsRegressor / KNeighborsClassifier
+            'n_neighbors': 'int',
+            'weights': 'select',
+            'algorithm': 'select',
+            'leaf_size': 'int',
+            'p': 'int',
+            'metric': 'select',
+            'metric_params': 'dict',
+        },
+
+        "KNeighborsRegressor": {
+            # KNN KNeighborsRegressor / KNeighborsClassifier
+            'n_neighbors': 'int',
+            'weights': 'select',
+            'algorithm': 'select',
+            'leaf_size': 'int',
+            'p': 'int',
+            'metric': 'select',
+            'metric_params': 'dict',
+        },
+        "KNeighborsClassifier": {
+            # KNN KNeighborsRegressor / KNeighborsClassifier
+            'n_neighbors': 'int',
+            'weights': 'select',
+            'algorithm': 'select',
+            'leaf_size': 'int',
+            'p': 'int',
+            'metric': 'select',
+            'metric_params': 'dict',
+        }
     }
 
-    }
+
 def param_options_map():
     """
     定义枚举类型参数的可选值（完整版本，去重处理）
     """
     return {
         #
-        "随机森林":{
-        'criterion': ['mse', 'friedman_mse', 'mae', 'poisson', 'gini', 'entropy'],
-        'max_features': ['auto', 'sqrt', 'log2', None],
+        "随机森林": {
+            'criterion': ['mse', 'friedman_mse', 'mae', 'poisson', 'gini', 'entropy'],
+            'max_features': ['auto', 'sqrt', 'log2', None],
         },
-        "决策树":{
-        # 决策树
-        'criterion': ['mse', 'friedman_mse', 'mae', 'poisson', 'gini', 'entropy'],
-        'max_features': ['auto', 'sqrt', 'log2', None],
-        'splitter': ['best', 'random'],
+        "决策树": {
+            # 决策树
+            'criterion': ['mse', 'friedman_mse', 'mae', 'poisson', 'gini', 'entropy'],
+            'max_features': ['auto', 'sqrt', 'log2', None],
+            'splitter': ['best', 'random'],
         },
         # Logistic回归
-        "逻辑回归":{
-        'penalty': ['l1', 'l2', 'elasticnet', 'none'],
-        'solver': ['lbfgs', 'liblinear', 'newton-cg', 'sag', 'saga'],
-        'multi_class': ['auto', 'ovr', 'multinomial'],
-        'class_weight': ['balanced', None],
+        "逻辑回归": {
+            'penalty': ['l1', 'l2', 'elasticnet', 'none'],
+            'solver': ['lbfgs', 'liblinear', 'newton-cg', 'sag', 'saga'],
+            'multi_class': ['auto', 'ovr', 'multinomial'],
+            'class_weight': ['balanced', None],
         },
         # 支持向量机
-        "支持向量机":{
-        'kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
-        'gamma': ['scale', 'auto'],
+        "支持向量机": {
+            'kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
+            'gamma': ['scale', 'auto'],
         },
         # KNN
-        "KNN":{
-        'weights': ['uniform', 'distance'],
-        'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
-        'metric': ['minkowski', 'euclidean', 'manhattan', 'chebyshev', 'precomputed'],
+        "KNN": {
+            'weights': ['uniform', 'distance'],
+            'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+            'metric': ['minkowski', 'euclidean', 'manhattan', 'chebyshev', 'precomputed'],
         },
         # GradientBoosting init
-        "梯度提升树":{
-        'init': [None],  # 可以是 estimator, 这里简单处理
-    }
+        "梯度提升树": {
+            'init': [None],  # 可以是 estimator, 这里简单处理
+        }
     }
 
 
 from skopt.space import Integer, Real, Categorical
-
 
 from skopt.space import Integer, Real, Categorical
 
@@ -149,7 +248,7 @@ def get_model_param_spaces():
         "分类": {
 
             "KNN": {
-                "n_neighbors": Categorical([3,5,7,9,11,13,15,17,19,21]),
+                "n_neighbors": Categorical([3, 5, 7, 9, 11, 13, 15, 17, 19, 21]),
                 "weights": Categorical(["uniform", "distance"]),
                 "p": Integer(1, 2),
                 "metric": Categorical(["minkowski", "chebyshev"])
@@ -218,7 +317,7 @@ def get_model_param_spaces():
         "回归": {
 
             "KNN": {
-                "n_neighbors": Categorical([3,5,7,9,11,13,15,17,19,21]),
+                "n_neighbors": Categorical([3, 5, 7, 9, 11, 13, 15, 17, 19, 21]),
                 "weights": Categorical(["uniform", "distance"]),
                 "p": Integer(1, 2),
                 "metric": Categorical(["minkowski", "chebyshev"])
@@ -339,7 +438,7 @@ def get_ML_param(query: str):
 
     # 3. 优化后的 Prompt 模板
     prompt_template = PromptTemplate(
-        template="""你是一名机器学习任务解析器。请将用户的任务描述严格转换为 JSON 格式。
+        template="""你是一名机器学习模型参数解析器。请将用户的任务描述严格转换为 JSON 格式。
         # 任务
         从用户的 `{query}` 中提取以下5个字段(如果描述比较模糊，根据意思提取，重点是保证格式正确)：
         
@@ -471,14 +570,12 @@ def convert_to_json_string(result_list: list) -> str:
     return final_json_string
 
 
-
 if __name__ == '__main__':
     # --- 测试 (与之前相同) ---
 
     test_query2 = "我需要训练一个线性回归模型，用于预测房价，特征列是SquareFootage,YearBuilt,Rooms，目标列是Price，参数设置fit_intercept为True，normalize为False"
     test_query5 = "用决策树模型做分类，特征列是A,B,C，目标列是Result，不需要特别指定参数，用默认值即可"
     test_query3 = "用支持向量机做二分类，特征列是Feature1,Feature2,Feature3，目标列是Label，参数C设置为1.0，kernel用'rbf'，gamma取'scale'"
-
 
     # --- 运行测试 1 ---
     print("--- 测试 Query 2 (线性回归) ---")
@@ -494,7 +591,6 @@ if __name__ == '__main__':
 
     print("\n[步骤 2] 目标 JSON 字符串输出:")
     print(final_json)
-
 
     # --- 运行测试 2 ---
     print("\n" + "---" * 15 + "\n")
